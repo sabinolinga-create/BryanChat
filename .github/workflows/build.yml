@@ -1,47 +1,9 @@
 
-name: Build BryanChat Android
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-24.04
-
-    strategy:
-      matrix:
-        abi: [arm64-v8a, armeabi-v7a, x86_64]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: tdlib/td
-          path: tdlib
-
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip openjdk-17-jdk
-
-      - name: Install Android NDK
-        run: |
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-          mkdir -p $HOME/android-sdk/cmdline-tools/latest
-          unzip -q commandlinetools-linux-13114758_latest.zip -d /tmp/android
-          mv /tmp/android/cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "ndk;27.2.12479018"
-
       - name: Build TDLib
         run: |
           cd tdlib
+          git submodule update --init --recursive
           mkdir build
           cd build
           cmake -DCMAKE_TOOLCHAIN_FILE=$HOME/android-sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake -DANDROID_ABI=${{ matrix.abi }} -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release ..
           cmake --build . --parallel 2
-
-      - name: Upload libraries
-        uses: actions/upload-artifact@v4
-        with:
-          name: tdlib-${{ matrix.abi }}
-          path: tdlib/build/
