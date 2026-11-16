@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout BryanChat
@@ -22,6 +22,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git gperf php-cli perl make cmake ninja-build wget unzip zip
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Install Android SDK and NDK
         run: |
@@ -41,17 +47,19 @@ jobs:
         run: |
           cd tdlib/example/android
           bash build-tdlib.sh $HOME/android-sdk 23.2.8568313
+
+      - name: Verify TDLib files
+        run: |
+          ls -lah tdlib/example/android/tdlib/
+          test -d tdlib/example/android/tdlib/libs
+          test -f tdlib/example/android/tdlib/java/org/drinkless/tdlib/Client.java
+
       - name: Integrate TDLib into BryanChat
         run: |
           mkdir -p app/src/main/jniLibs
           mkdir -p app/src/main/java
           cp -a tdlib/example/android/tdlib/libs/. app/src/main/jniLibs/
           cp -a tdlib/example/android/tdlib/java/org app/src/main/java/
-                - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -68,13 +76,8 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
-      - name: Verify generated files
-        run: |
-          ls -lah tdlib/example/android/tdlib/
-          test -f tdlib/example/android/tdlib/tdlib.zip
-          test -d tdlib/example/android/tdlib/libs
 
-      - name: Upload Android libraries
+      - name: Upload TDLib libraries
         uses: actions/upload-artifact@v4
         with:
           name: BryanChat-TDLib-Android
