@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout TDLib
+      - name: Download TDLib source
         uses: actions/checkout@v4
         with:
           repository: tdlib/td
@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git gperf php-cli perl unzip zip wget
+          sudo apt-get install -y git gperf php-cli perl make cmake ninja-build wget unzip zip
 
       - name: Install Android SDK and NDK
         run: |
@@ -29,20 +29,26 @@ jobs:
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "ndk;23.2.8568313" "cmake;3.22.1" "platforms;android-34"
 
-      - name: Build TDLib Android
+      - name: Build OpenSSL for Android
         run: |
           cd tdlib/example/android
-          chmod +x check-environment.sh build-openssl.sh build-tdlib.sh
-          ./check-environment.sh
-          ./build-openssl.sh $HOME/android-sdk 23.2.8568313
-          ./build-tdlib.sh $HOME/android-sdk 23.2.8568313
+          bash build-openssl.sh $HOME/android-sdk 23.2.8568313
 
-      - name: Upload TDLib
+      - name: Build TDLib for Android
+        run: |
+          cd tdlib/example/android
+          bash build-tdlib.sh $HOME/android-sdk 23.2.8568313
+
+      - name: Verify generated files
+        run: |
+          ls -lah tdlib/example/android/tdlib/
+          test -f tdlib/example/android/tdlib/tdlib.zip
+          test -d tdlib/example/android/tdlib/libs
+
+      - name: Upload Android libraries
         uses: actions/upload-artifact@v4
         with:
           name: BryanChat-TDLib-Android
-          path: |
-            tdlib/example/android/tdlib.zip
-            tdlib/example/android/tdlib-debug.zip
-            tdlib/example/android/libs/
-            tdlib/example/android/java/
+          path: tdlib/example/android/tdlib/
+          if-no-files-found: error
+          retention-days: 7
