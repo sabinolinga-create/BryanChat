@@ -1,0 +1,29 @@
+
+name: Build TDLib Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout TDLib
+        uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          path: tdlib
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git make gperf php-cli zlib1g-dev libssl-dev clang cmake ninja-build
+
+      - name: Build TDLib
+        run: |
+          cd tdlib
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_JNI=ON ..
+          cmake --build . --parallel 2
