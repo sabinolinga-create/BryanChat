@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.bryanchat.app'
-    compileSdk 35
+    compileSdk 34
 
     defaultConfig {
         applicationId 'com.bryanchat.app'
         minSdk 24
-        targetSdk 35
+        targetSdk 34
         versionCode 1
         versionName '1.0'
     }
@@ -24,4 +24,5 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.annotation:annotation:1.9.1'
 }
