@@ -1,0 +1,99 @@
+name: Build BryanChat (Telegram fork)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+
+    steps:
+      - name: Libérer de l'espace disque
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
+
+      - name: Checkout du dépôt
+        uses: actions/checkout@v5
+
+      - name: Télécharger les sous-modules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive --depth=1 \
+            || git submodule update --init --recursive
+
+      - name: Appliquer le nom et le logo BryanChat
+        run: |
+          # Nom de l'appli (ne fait rien si la chaîne n'est pas trouvée)
+          find . -path '*/res/values/strings.xml' -not -path './.git/*' \
+            -exec sed -i 's|<string name="AppName">Telegram</string>|<string name="AppName">BryanChat</string>|' {} +
+          # Logo : placer bryanchat-logo.png à la racine du dépôt (carré, 512x512 conseillé)
+          if [ -f bryanchat-logo.png ]; then
+            sudo apt-get install -y imagemagick
+            find . -path '*/res/mipmap-*' -name 'ic_launcher*.png' -not -path './.git/*' | while read -r f; do
+              size=$(identify -format '%wx%h' "$f")
+              convert bryanchat-logo.png -resize "${size}!" "$f"
+            done
+            echo "Logo BryanChat appliqué"
+          else
+            echo "Pas de bryanchat-logo.png : logo inchangé"
+          fi
+
+      - name: Injecter api_id et api_hash (si les secrets existent)
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          F=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          if [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+            sed -i "s|public static int APP_ID = .*;|public static int APP_ID = ${TG_API_ID};|" "$F"
+            sed -i "s|public static String APP_HASH = .*;|public static String APP_HASH = \"${TG_API_HASH}\";|" "$F"
+            echo "Clés BryanChat injectées"
+          else
+            echo "Pas de secrets TG_API_ID / TG_API_HASH : clés d'origine (build de test seulement)"
+          fi
+          grep -n "APP_ID =" "$F" | sed 's/[0-9a-f]\{32\}/***/'
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Installer SDK 36, NDK 27.2 et CMake
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          "$SDKM" --sdk_root="$ANDROID_HOME" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "platform-tools" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Installer Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Compiler l'APK (variante Standalone)
+        env:
+          GRADLE_OPTS: "-Xmx4g -Dorg.gradle.daemon=false"
+        run: gradle :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace
+
+      - name: Lister les APK produits
+        run: find TMessagesProj_AppStandalone/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
+
+      - name: Envoyer l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BryanChat-Telegram-APK
+          path: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
